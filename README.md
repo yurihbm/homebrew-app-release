@@ -23,7 +23,7 @@ It detects the `.xcodeproj`, uses its name as the scheme and derives the cask na
 
 Re-running it updates everything to the latest tag, including the skill. It never commits; review with `git diff`.
 
-The app's scheme must build `<scheme>.app`.
+The release zip is always `<scheme>.zip`; the `.app` inside is named after the target's `PRODUCT_NAME`, which can contain spaces (e.g. `Keyboard Clean Tool.app`).
 
 ## One-time setup for a new app
 
@@ -41,10 +41,10 @@ The app's scheme must build `<scheme>.app`.
      desc "<One-line description>"
      homepage "https://github.com/yurihbm/<repo>"
 
-     app "<scheme>.app"
+     app "<PRODUCT_NAME>.app"
 
      postflight_steps do
-       run "/usr/bin/xattr", args: ["-cr", "{{appdir}}/<scheme>.app"]
+       run "/usr/bin/xattr", args: ["-cr", "{{appdir}}/<PRODUCT_NAME>.app"]
      end
    end
    ```

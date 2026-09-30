@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       scheme:
-        description: Xcode scheme to archive; the built app must be named <scheme>.app
+        description: Xcode scheme to archive; also names the release zip (<scheme>.zip)
         required: true
         type: string
       cask:
@@ -40,8 +40,13 @@ jobs:
       - name: Archive
         run: xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release -archivePath "build/$SCHEME.xcarchive" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= MARKETING_VERSION="${GITHUB_REF_NAME#v}" archive
 
+      # The .app is named after PRODUCT_NAME, which may differ from the scheme
+      # (e.g. "Keyboard Clean Tool.app"); the zip keeps the scheme name so the
+      # cask URL stays space-free.
       - name: Zip .app
-        run: ditto -c -k --sequesterRsrc --keepParent "build/$SCHEME.xcarchive/Products/Applications/$SCHEME.app" "$SCHEME.zip"
+        run: |
+          APP=$(find "build/$SCHEME.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$SCHEME.zip"
 
       - name: Create release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

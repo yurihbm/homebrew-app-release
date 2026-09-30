@@ -12,14 +12,14 @@ description: Tags this macOS app repo, which triggers the shared yurihbm/homebre
 This repo's `.github/workflows/test.yml` and `release.yml` are thin callers of the reusable workflows in [`yurihbm/homebrew-app-release`](https://github.com/yurihbm/homebrew-app-release), pinned by commit SHA. Read `.github/workflows/release.yml` first — its `with:` block gives you the values used below:
 
 - `<repo>` — this repo, from `gh repo view --json nameWithOwner --jq .nameWithOwner`
-- `<scheme>` — the Xcode scheme; also the app name (`<scheme>.app`, `<scheme>.zip`)
+- `<scheme>` — the Xcode scheme; also names the release zip (`<scheme>.zip`). The `.app` itself is named after the target's `PRODUCT_NAME`, which may differ (e.g. `Keyboard Clean Tool.app`)
 - `<cask>` — the cask in the tap (`Casks/<cask>.rb`)
 
 - `test.yml` — runs `xcodebuild test` on every push/PR to `main`.
 - `release.yml` — runs on push of a `v*` tag. In order, it:
   1. Runs the test suite; a failing test aborts the release.
   2. Archives with `xcodebuild archive -configuration Release CODE_SIGN_IDENTITY=-` — ad-hoc signed (no paid Apple Developer account yet), which still applies the app's entitlements (sandbox, hardened runtime). `MARKETING_VERSION` is set from the tag, so `vX.Y.Z` ships as version `X.Y.Z`.
-  3. Zips `<scheme>.app` out of the `.xcarchive` with `ditto`.
+  3. Zips the `.app` out of the `.xcarchive` with `ditto` into `<scheme>.zip`.
   4. Publishes a GitHub Release with the zip attached and auto-generated release notes.
   5. Updates `Casks/<cask>.rb` in the [`yurihbm/homebrew-apps`](https://github.com/yurihbm/homebrew-apps) tap (version + sha256) and pushes, so `brew update` picks up the new version.
 
