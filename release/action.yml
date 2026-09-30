@@ -1,0 +1,77 @@
+name: Release macOS app
+description: Tests, archives an ad-hoc signed Release build versioned from the v* tag, publishes a GitHub Release with the zipped .app, and bumps the cask in yurihbm/homebrew-apps.
+
+inputs:
+  project:
+    description: Xcode project file, e.g. Lucid.xcodeproj
+    required: true
+  scheme:
+    description: Xcode scheme to archive; also names the release zip (<scheme>.zip)
+    required: true
+  cask:
+    description: Cask name in the tap, i.e. Casks/<cask>.rb
+    required: true
+  tap-token:
+    description: Fine-grained PAT with Contents read/write on yurihbm/homebrew-apps
+    required: true
+
+# The calling job needs `permissions: contents: write` to publish the release.
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Test
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        SCHEME: ${{ inputs.scheme }}
+      run: xcodebuild test -project "$PROJECT" -scheme "$SCHEME" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+
+    - name: Archive
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        SCHEME: ${{ inputs.scheme }}
+      run: xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release -archivePath "build/$SCHEME.xcarchive" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= MARKETING_VERSION="${GITHUB_REF_NAME#v}" archive
+
+    # The .app is named after PRODUCT_NAME, which may differ from the scheme
+    # (e.g. "Keyboard Clean Tool.app"); the zip keeps the scheme name so the
+    # cask URL stays space-free.
+    - name: Zip .app
+      shell: bash
+      env:
+        SCHEME: ${{ inputs.scheme }}
+      run: |
+        APP=$(find "build/$SCHEME.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+        ditto -c -k --sequesterRsrc --keepParent "$APP" "$SCHEME.zip"
+
+    - name: Create release
+      uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      with:
+        files: ${{ inputs.scheme }}.zip
+        generate_release_notes: true
+
+    - name: Update Homebrew cask
+      shell: bash
+      env:
+        SCHEME: ${{ inputs.scheme }}
+        CASK: ${{ inputs.cask }}
+        GH_TOKEN: ${{ inputs.tap-token }}
+      run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        SHA256=$(shasum -a 256 "$SCHEME.zip" | cut -d ' ' -f1)
+
+        gh auth setup-git
+        gh repo clone yurihbm/homebrew-apps tap
+        cd tap
+
+        sed -i '' "s/version \".*\"/version \"$VERSION\"/" "Casks/$CASK.rb"
+        sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" "Casks/$CASK.rb"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git commit -am "$CASK $VERSION" || exit 0
+        git push

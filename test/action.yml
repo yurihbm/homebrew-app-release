@@ -1,0 +1,24 @@
+name: Test macOS app
+description: Checks out the repo and runs xcodebuild test.
+
+inputs:
+  project:
+    description: Xcode project file, e.g. Lucid.xcodeproj
+    required: true
+  scheme:
+    description: Xcode scheme to test
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Test
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        SCHEME: ${{ inputs.scheme }}
+      run: xcodebuild test -project "$PROJECT" -scheme "$SCHEME" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
