@@ -2,10 +2,29 @@
 
 Shared CI and release tooling for my macOS apps distributed through the [`yurihbm/homebrew-apps`](https://github.com/yurihbm/homebrew-apps) tap (e.g. [Lucid](https://github.com/yurihbm/lucid), [Keyboard Clean Tool](https://github.com/yurihbm/keyboard-clean-tool)).
 
-- `.github/workflows/test.yml` — reusable workflow: `xcodebuild test`.
-- `.github/workflows/release.yml` — reusable workflow, run on a `v*` tag: tests, archives an ad-hoc signed Release build versioned from the tag, publishes a GitHub Release with the zipped `.app`, and bumps the cask in the tap.
+- `test` — composite action: checks out the repo and runs `xcodebuild test`.
+- `release` — composite action, for a `v*` tag: tests, archives an ad-hoc signed Release build versioned from the tag, publishes a GitHub Release with the zipped `.app`, and bumps the cask in the tap.
 - `skills/release/SKILL.md` — the `/release` Claude Code skill, copied into each app repo.
 - `install.sh` — wires an app repo up to all of the above.
+
+The app repo's workflows declare the runner, environment, permissions, and secrets; the actions only hold the steps:
+
+```yaml
+jobs:
+  release:
+    runs-on: xcode-27
+    environment: main
+    permissions:
+      contents: write
+
+    steps:
+      - uses: yurihbm/homebrew-app-release/release@v0.1.0
+        with:
+          project: Lucid.xcodeproj
+          scheme: Lucid
+          cask: lucid
+          tap-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+```
 
 ## Installing into an app repo
 
@@ -15,9 +34,9 @@ From the app repo root:
 bash <(curl -fsSL https://raw.githubusercontent.com/yurihbm/homebrew-app-release/main/install.sh)
 ```
 
-It detects the `.xcodeproj`, uses its name as the scheme and derives the cask name from it (`KeyboardCleanTool` → `keyboard-clean-tool`); override with `--scheme NAME` / `--cask NAME`. It writes, pinned to this repo's latest tag by commit SHA:
+It detects the `.xcodeproj`, uses its name as the scheme and derives the cask name from it (`KeyboardCleanTool` → `keyboard-clean-tool`); override with `--scheme NAME` / `--cask NAME`. It writes, pinned to this repo's latest tag:
 
-- `.github/workflows/test.yml` and `release.yml` (thin callers of the reusable workflows)
+- `.github/workflows/test.yml` and `release.yml`, using the actions above
 - `.github/dependabot.yml`, if missing, so Dependabot opens PRs when a new tag of this repo ships
 - `.claude/skills/release/SKILL.md`
 
@@ -53,8 +72,8 @@ The release zip is always `<scheme>.zip`; the `.app` inside is named after the t
 
 2. **Environment** — in the app repo, create a GitHub Environment named `main` whose "Deployment branches and tags" rule allows only the `v*` tag pattern.
 
-3. **Secret** — add `HOMEBREW_TAP_TOKEN` to that environment: a fine-grained PAT scoped only to `yurihbm/homebrew-apps` with `Contents: Read and write`. The reusable workflow declares `environment: main`, which resolves to the *calling* repo's environment, so the secret never has to be passed explicitly.
+3. **Secret** — add `HOMEBREW_TAP_TOKEN` to that environment: a fine-grained PAT scoped only to `yurihbm/homebrew-apps` with `Contents: Read and write`. The generated `release.yml` passes it to the action as `tap-token`.
 
 ## Releasing a new version of this repo
 
-Commit to `main`, then push an annotated `vX.Y.Z` tag. App repos pick it up through Dependabot (workflows) or by re-running `install.sh` (workflows + skill).
+Commit to `main`, push an annotated `vX.Y.Z` tag, then `gh release create vX.Y.Z --generate-notes`. App repos pick it up through Dependabot (workflows) or by re-running `install.sh` (workflows + skill).

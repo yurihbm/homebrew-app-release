@@ -9,7 +9,7 @@ description: Tags this macOS app repo, which triggers the shared yurihbm/homebre
 
 ## How it works
 
-This repo's `.github/workflows/test.yml` and `release.yml` are thin callers of the reusable workflows in [`yurihbm/homebrew-app-release`](https://github.com/yurihbm/homebrew-app-release), pinned by commit SHA. Read `.github/workflows/release.yml` first — its `with:` block gives you the values used below:
+This repo's `.github/workflows/test.yml` and `release.yml` run the `test` and `release` composite actions from [`yurihbm/homebrew-app-release`](https://github.com/yurihbm/homebrew-app-release), pinned to a version tag. The runner, environment, permissions, and secrets are declared in these workflow files. Read `.github/workflows/release.yml` first — its `with:` block gives you the values used below:
 
 - `<repo>` — this repo, from `gh repo view --json nameWithOwner --jq .nameWithOwner`
 - `<scheme>` — the Xcode scheme; also names the release zip (`<scheme>.zip`). The `.app` itself is named after the target's `PRODUCT_NAME`, which may differ (e.g. `Keyboard Clean Tool.app`)
@@ -25,7 +25,7 @@ This repo's `.github/workflows/test.yml` and `release.yml` are thin callers of t
 
 Both jobs run on the `xcode-27` GitHub-hosted runner label (arm64 only, currently in public preview) — `macos-latest` doesn't have Xcode 27 yet.
 
-The Homebrew-cask-update step needs write access to a different repo (`homebrew-apps`), so it authenticates with `secrets.HOMEBREW_TAP_TOKEN` — a fine-grained PAT scoped only to that repo (`Contents: Read and write`) — stored in this repo's `main` GitHub Environment. That environment's "Deployment branches and tags" rule is restricted to the `v*` tag pattern (not the `main` branch), since this job only ever runs on tag pushes.
+The Homebrew-cask-update step needs write access to a different repo (`homebrew-apps`), so `release.yml` passes `secrets.HOMEBREW_TAP_TOKEN` to the action as `tap-token` — a fine-grained PAT scoped only to that repo (`Contents: Read and write`) — stored in this repo's `main` GitHub Environment. That environment's "Deployment branches and tags" rule is restricted to the `v*` tag pattern (not the `main` branch), since this job only ever runs on tag pushes.
 
 ## Steps to cut a release
 

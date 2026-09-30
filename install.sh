@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sets up (or updates) a macOS app repo to test and release through this repo's
-# reusable workflows and the yurihbm/homebrew-apps tap. Run from the app repo root:
+# test/release actions and the yurihbm/homebrew-apps tap. Run from the app repo root:
 #
 #   bash <(curl -fsSL https://raw.githubusercontent.com/yurihbm/homebrew-app-release/main/install.sh) [--scheme NAME] [--cask NAME]
 #
@@ -48,10 +48,8 @@ REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || die "couldn't r
 
 TAG=$(git ls-remote --tags --refs --sort=-v:refname "https://github.com/$SHARED_REPO.git" 'v*' | head -1 | sed 's|.*refs/tags/||')
 [ -n "$TAG" ] || die "no v* tag found in $SHARED_REPO"
-# Peeled (^{}) line is the commit for annotated tags; fall back to the tag ref for lightweight ones.
-SHA=$(git ls-remote "https://github.com/$SHARED_REPO.git" "refs/tags/$TAG^{}" "refs/tags/$TAG" | sort -k2 -r | head -1 | cut -f1)
 
-echo "Installing $SHARED_REPO $TAG ($SHA) into $REPO"
+echo "Installing $SHARED_REPO $TAG into $REPO"
 echo "  project: $PROJECT"
 echo "  scheme:  $SCHEME"
 echo "  cask:    $CASK"
@@ -69,10 +67,13 @@ on:
 
 jobs:
   test:
-    uses: $SHARED_REPO/.github/workflows/test.yml@$SHA # $TAG
-    with:
-      project: $PROJECT
-      scheme: $SCHEME
+    runs-on: xcode-27
+
+    steps:
+      - uses: $SHARED_REPO/test@$TAG
+        with:
+          project: $PROJECT
+          scheme: $SCHEME
 EOF
 
 cat > .github/workflows/release.yml <<EOF
@@ -85,13 +86,19 @@ on:
 
 jobs:
   release:
-    uses: $SHARED_REPO/.github/workflows/release.yml@$SHA # $TAG
+    runs-on: xcode-27
+    # Only v* tags may deploy to this environment; it holds HOMEBREW_TAP_TOKEN.
+    environment: main
     permissions:
       contents: write
-    with:
-      project: $PROJECT
-      scheme: $SCHEME
-      cask: $CASK
+
+    steps:
+      - uses: $SHARED_REPO/release@$TAG
+        with:
+          project: $PROJECT
+          scheme: $SCHEME
+          cask: $CASK
+          tap-token: \${{ secrets.HOMEBREW_TAP_TOKEN }}
 EOF
 
 if [ ! -f .github/dependabot.yml ]; then
@@ -107,7 +114,7 @@ elif ! grep -q "github-actions" .github/dependabot.yml; then
     warn ".github/dependabot.yml exists but doesn't cover github-actions; the workflow pin won't be updated automatically"
 fi
 
-curl -fsSL "https://raw.githubusercontent.com/$SHARED_REPO/$SHA/skills/release/SKILL.md" -o .claude/skills/release/SKILL.md
+curl -fsSL "https://raw.githubusercontent.com/$SHARED_REPO/$TAG/skills/release/SKILL.md" -o .claude/skills/release/SKILL.md
 
 # One-time setup that this script deliberately doesn't do for you.
 gh api "repos/$TAP_REPO/contents/Casks/$CASK.rb" --silent 2>/dev/null \
